@@ -20,7 +20,7 @@
     // 全局副作用栈
     const effectStack = [];
     // 副作用函数->响应式数据
-    function effect(fn) {
+    function effect(fn, options = {}) {
       const effectFn = function () {
         try {
           effectStack.push(effectFn);
@@ -30,7 +30,10 @@
           effectStack.pop();
         }
       };
-      effectFn();
+      if (!options.lazy) {
+        effectFn();
+      }
+      return effectFn; // 返回副作用函数，以便懒执行
     }
 
     function ref(value) {
@@ -88,13 +91,46 @@
       });
       return proxy;
     }
+    function watch(source, callback) {
+      let getter = () => {
+        if (typeof source === 'function') {
+          return source();
+        } else {
+          return source.value;
+        }
+      };
 
+      let oldValue = getter();
+      const effectFn = () => {
+        const newValue = getter();
+        if (newValue !== oldValue) {
+          callback(newValue, oldValue);
+          oldValue = newValue;
+        }
+      };
+
+      effect(effectFn);
+    }
+    function computed(getter) {
+      const result = ref(undefined);
+      const effectFn = effect(() => {
+        result.value = getter();
+      }, { lazy: true }); // 懒执行 -- 后续手动执行副作用函数，不在effect handle中执行
+
+      result.effect = effectFn; // 保存副作用函数
+
+      // 第一次执行，计算初始值
+      effectFn();
+
+      return result;
+    }
     // 测试ref 
     const count = ref(1)
     const refTestDom = document.getElementById('refTest')
+    // 测试computed
+    const doubleCount = computed(() => count.value * 2);
     effect(() => {
-      refTestDom.innerHTML = `count: ${count.value}`
-      console.log('count', count)
+      refTestDom.innerHTML = `count: ${count.value},doubleCount: ${doubleCount.value}`
     })
     const increase = () => {
       count.value++
@@ -120,6 +156,15 @@
       reactiveTestDom.innerHTML = `count: ${state.count}, nested.value: ${state.nested.value}`;
       console.log('state', state);
     });
+
+    // 测试watch
+    watch(
+      () => count.value,
+      (newValue, oldValue) => {
+        state.count = count.value;
+        console.log(`count changed from ${oldValue} to ${newValue}`);
+      }
+    );
   </script>
 </body>
 
