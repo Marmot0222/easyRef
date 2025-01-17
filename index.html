@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+
+<body>
+  <div id="app">
+    <div id="test"></div>
+    <button onclick="increase()">+</button>
+    <button onclick="decrease()">-</button>
+  </div>
+  <script>
+    // 全局副作用栈
+    const effectStack = [];
+    // 副作用函数->响应式数据
+    function effect(fn) {
+      const effectFn = function () {
+        try {
+          effectStack.push(effectFn);
+          // 执行fn 读取相关变量让proxy的getter收集依赖
+          fn();
+        } finally {
+          effectStack.pop();
+        }
+      };
+      effectFn();
+    }
+
+    function ref(value) {
+      // 创建ref对象
+      const refObj = {
+        value, // 值
+        __v_isRef: true, // 标识该对象是ref对象
+        dep: new Set(), // 依赖集合
+      };
+      // 拦截读取和设置
+      const proxy = new Proxy(refObj, {
+        get(target, key) {
+          if (key === "value" && effectStack.length) {
+            // 添加依赖
+            target.dep.add(effectStack[effectStack.length - 1]);
+          }
+          return target[key];
+        },
+        set(target, key, newValue) {
+          if (key === "value") {
+            target.value = newValue;
+            // 触发依赖
+            target.dep.forEach((effect) => effect());
+          }
+        },
+      });
+      return proxy;
+    }
+    const count = ref(1)
+    const testDiv = document.getElementById('test')
+
+    effect(() => {
+      testDiv.innerHTML = `count: ${count.value}`
+      console.log('count', count)
+    })
+    const increase = () => {
+      count.value++
+    }
+    const decrease = () => {
+      count.value--
+    }
+  </script>
+</body>
+
+</html>
