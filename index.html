@@ -9,9 +9,12 @@
 
 <body>
   <div id="app">
-    <div id="test"></div>
+    <div id="refTest"></div>
     <button onclick="increase()">+</button>
     <button onclick="decrease()">-</button>
+    <div id="reactiveTest"></div>
+    <button onclick="increaseNested()">+</button>
+    <button onclick="decreaseNested()">-</button>
   </div>
   <script>
     // 全局副作用栈
@@ -56,11 +59,41 @@
       });
       return proxy;
     }
-    const count = ref(1)
-    const testDiv = document.getElementById('test')
+    function reactive(obj) {
+      // 递归转换对象的每个属性
+      const proxy = new Proxy(obj, {
+        get(target, key) {
+          if (typeof target[key] === 'object' && target[key] !== null) {
+            return reactive(target[key]); // 递归转换
+          }
+          if (effectStack.length) {
+            // 添加依赖
+            if (!target.dep) {
+              target.dep = new Set();
+            }
+            target.dep.add(effectStack[effectStack.length - 1]);
+          }
+          return target[key];
+        },
+        set(target, key, newValue) {
+          target[key] = newValue;
+          if (typeof newValue === 'object' && newValue !== null) {
+            target[key] = reactive(newValue); // 递归转换
+          }
+          if (target.dep) {
+            // 触发依赖
+            target.dep.forEach((effect) => effect());
+          }
+        },
+      });
+      return proxy;
+    }
 
+    // 测试ref 
+    const count = ref(1)
+    const refTestDom = document.getElementById('refTest')
     effect(() => {
-      testDiv.innerHTML = `count: ${count.value}`
+      refTestDom.innerHTML = `count: ${count.value}`
       console.log('count', count)
     })
     const increase = () => {
@@ -69,6 +102,24 @@
     const decrease = () => {
       count.value--
     }
+    // 测试reactive
+    const state = reactive({
+      count: 1,
+      nested: {
+        value: 10
+      }
+    });
+    const reactiveTestDom = document.getElementById('reactiveTest')
+    const increaseNested = () => {
+      state.nested.value++;
+    };
+    const decreaseNested = () => {
+      state.nested.value--;
+    };
+    effect(() => {
+      reactiveTestDom.innerHTML = `count: ${state.count}, nested.value: ${state.nested.value}`;
+      console.log('state', state);
+    });
   </script>
 </body>
 
