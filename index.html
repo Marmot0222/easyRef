@@ -39,7 +39,7 @@
     function ref(value) {
       // 创建ref对象
       const refObj = {
-        value, // 值
+        value: typeof value === 'object' && value !== null ? reactive(value) : value, // 如果是对象则使用reactive处理
         __v_isRef: true, // 标识该对象是ref对象
         dep: new Set(), // 依赖集合
       };
@@ -54,7 +54,8 @@
         },
         set(target, key, newValue) {
           if (key === "value") {
-            target.value = newValue;
+            // 如果新值是对象，则使用reactive处理
+            target.value = typeof newValue === 'object' && newValue !== null ? reactive(newValue) : newValue;
             // 触发依赖
             target.dep.forEach((effect) => effect());
           }
